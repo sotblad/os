@@ -6,6 +6,11 @@
 #include "variant.h"
 #include "memtable.h"
 #include "merger.h"
+#include "pthread.h"
+
+pthread_mutex_t mtx;
+int ret;
+
 
 typedef struct _db {
 //    char basedir[MAX_FILENAME];

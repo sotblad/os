@@ -5,13 +5,18 @@
 
 #define DATAS ("testdb")
 
-void _write_test(long int count, int r)
+
+void* _write_test(void* arg)
 {
-	int i;
-	double cost;
-	long long start,end;
+	res* retu;
+	retu = (res*)malloc(sizeof(res));
+	args* loc = (args*)arg;
+	long int count = loc->count;
+	int r = loc->r;
+	int curKey = loc->curKey;
 	Variant sk, sv;
-	DB* db;
+	DB* dbase;
+	dbase = loc->db;
 
 	char key[KSIZE + 1];
 	char val[VSIZE + 1];
@@ -20,96 +25,76 @@ void _write_test(long int count, int r)
 	memset(key, 0, KSIZE + 1);
 	memset(val, 0, VSIZE + 1);
 	memset(sbuf, 0, 1024);
-
-	db = db_open(DATAS);
-
-	start = get_ustime_sec();
-	for (i = 0; i < count; i++) {
+	
+	for(;curKey < count; curKey++) {
 		if (r)
 			_random_key(key, KSIZE);
 		else
-			snprintf(key, KSIZE, "key-%d", i);
-		fprintf(stderr, "%d adding %s\n", i, key);
-		snprintf(val, VSIZE, "val-%d", i);
+			snprintf(key, KSIZE, "key-%d", curKey);
+		fprintf(stderr, "%d adding %s\n", curKey, key);
+		snprintf(val, VSIZE, "val-%d", curKey);
 
 		sk.length = KSIZE;
 		sk.mem = key;
 		sv.length = VSIZE;
 		sv.mem = val;
 
-		db_add(db, &sk, &sv);
-		if ((i % 10000) == 0) {
-			fprintf(stderr,"random write finished %d ops%30s\r", 
-					i, 
-					"");
-
-			fflush(stderr);
-		}
+		db_add(dbase, &sk, &sv);
 	}
 
-	db_close(db);
-
-	end = get_ustime_sec();
-	cost = end -start;
-
-	printf(LINE);
-	printf("|Random-Write	(done:%ld): %.6f sec/op; %.1f writes/sec(estimated); cost:%.3f(sec);\n"
-		,count, (double)(cost / count)
-		,(double)(count / cost)
-		,cost);	
+	retu->found = 0;
+	return retu;
 }
 
-void _read_test(long int count, int r)
+void* _read_test(void* arg)
 {
-	int i;
+	res* retu;
+	retu = (res*)malloc(sizeof(res));
+	args* loc = (args*)arg;
+	long int count = loc->count;
+	int r = loc->r;
 	int ret;
 	int found = 0;
-	double cost;
-	long long start,end;
 	Variant sk;
 	Variant sv;
-	DB* db;
 	char key[KSIZE + 1];
+	int curKey = loc->curKey;
+	DB* dbase;
+	dbase = loc->db;
 
-	db = db_open(DATAS);
-	start = get_ustime_sec();
-	for (i = 0; i < count; i++) {
+	for (;curKey < count; curKey++) {
 		memset(key, 0, KSIZE + 1);
 
-		/* if you want to test random write, use the following */
 		if (r)
 			_random_key(key, KSIZE);
 		else
-			snprintf(key, KSIZE, "key-%d", i);
-		fprintf(stderr, "%d searching %s\n", i, key);
+			snprintf(key, KSIZE, "key-%d", curKey);
+		fprintf(stderr, "%d searching %s\n", curKey, key);
 		sk.length = KSIZE;
 		sk.mem = key;
-		ret = db_get(db, &sk, &sv);
+		ret = db_get(dbase, &sk, &sv);
 		if (ret) {
 			//db_free_data(sv.mem);
 			found++;
 		} else {
 			INFO("not found key#%s", 
 					sk.mem);
-    	}
-
-		if ((i % 10000) == 0) {
-			fprintf(stderr,"random read finished %d ops%30s\r", 
-					i, 
-					"");
-
-			fflush(stderr);
-		}
+    		}
 	}
 
-	db_close(db);
-
-	end = get_ustime_sec();
-	cost = end - start;
-	printf(LINE);
-	printf("|Random-Read	(done:%ld, found:%d): %.6f sec/op; %.1f reads /sec(estimated); cost:%.3f(sec)\n",
-		count, found,
-		(double)(cost / count),
-		(double)(count / cost),
-		cost);
+	retu->count = count;
+	retu->found = found;
+	return retu;
+	free(retu);
 }
+
+
+
+
+
+
+
+
+
+
+

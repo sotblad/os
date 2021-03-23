@@ -14,7 +14,9 @@ DB* db_open_ex(const char* basedir, uint64_t cache_size)
 
     strncpy(self->basedir, basedir, MAX_FILENAME);
     self->sst = sst_new(basedir, cache_size);
-
+    self->sst->wait = 0;
+    self->sst->mtx = mtx;
+    self->sst->unlockedbysst = 0;
     Log* log = log_new(self->sst->basedir);
     self->memtable = memtable_new(log);
 
@@ -46,6 +48,10 @@ void db_close(DB *self)
 
 int db_add(DB* self, Variant* key, Variant* value)
 {
+    self->sst->wait = 1;
+    pthread_mutex_lock(&mtx);
+    self->sst->wait = 0;
+
     if (memtable_needs_compaction(self->memtable))
     {
         INFO("Starting compaction of the memtable after %d insertions and %d deletions",
@@ -53,16 +59,19 @@ int db_add(DB* self, Variant* key, Variant* value)
         sst_merge(self->sst, self->memtable);
         memtable_reset(self->memtable);
     }
-
-    return memtable_add(self->memtable, key, value);
+    ret = memtable_add(self->memtable, key, value);
+    if(self->sst->unlockedbysst == 0)
+    	pthread_mutex_unlock(&mtx);
+    return ret;
 }
 
 int db_get(DB* self, Variant* key, Variant* value)
 {
+    int ret;
     if (memtable_get(self->memtable->list, key, value) == 1)
         return 1;
-
-    return sst_get(self->sst, key, value);
+    ret = sst_get(self->sst, key, value);
+    return ret;
 }
 
 int db_remove(DB* self, Variant* key)
